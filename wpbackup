@@ -133,7 +133,7 @@ def main():
     if args.PATH:
         extractWordpressConf()
         zipWordpressFolder()
-        #dumpWordpressDB()
+        dumpWordpressDB()
         if args.no_upload == False:
             uploadFilesToSFTP()
     else:
