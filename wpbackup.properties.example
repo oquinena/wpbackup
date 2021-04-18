@@ -1,5 +1,6 @@
 [sftp]
-ftp.server=someserver
-ftp.username=user
-ftp.password=secret
+sftp.server=someserver
+sftp.username=user
+sftp.password=secret
+sftp.remotedir=/path/to/upload
 
