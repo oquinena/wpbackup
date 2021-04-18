@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+####################################################################
+# wpbackup                                                         # 
+# Commandline tool to quickly extract wordpress                    #
+# datafiles and wordpressdatabase and uploads sftp-server          #
+# Usage: ./wpbackup -h                                             #
+# Written by: daniel@fast2.se                                      #
+####################################################################
+
+import os
+import subprocess
+import sys
+import re
+import argparse
+import zipfile
+import configparser
+
+# Add commandline-arguments using argparse
+parser = argparse.ArgumentParser(prog='wpbackup', description='Backup wordpress data and upload databasedump + zipfile to SFTP-server')
+parser.add_argument('PATH', type=str, help='Path to wordpress-installation. eg. /opt/fast2/webb/apache/www')
+parser.add_argument('-i', '--includeuploads', action='store_true', help='Include files in wp-content/uploads. Might result in error if size exceeds 4Gb')
+parser.add_argument('-n', '--no-upload', action='store_true', help='Don\'t upload files')
+
+args = parser.parse_args()
+
+# Get properties for sftp-connection
+try:
+    config = configparser.RawConfigParser()
+    config.read('wpbackup.properties')
+except:
+    print('Error: Could not read properties from wpbackup.properties. Upload to sftp-server is disabled')
+    args.no_upload = True
+
+# Only use PySFTP-module if available, else disable sftp
+try:
+    import pysftp
+except:
+    print('SFTP-module unavailable. Upload to sftp-server is disabled')
+    args.no_upload = True
+
+# Parse wp-config.php
+def extractWordpressConf():
+    # Regexp to parse php's "define(key, value)" syntax
+    define_pattern = re.compile(r"""\bdefine\(\s*('|")(.*)\1\s*,\s*('|")(.*)\3\)\s*;""")
+    assign_pattern = re.compile(r"""(^|;)\s*\$([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)\s*=\s*('|")(.*)\3\s*;""")
+
+    # Assign variables
+    wp_path = args.PATH
+    wp_config = 'wp-config.php'
+    wp_vars = {}
+    
+    try:
+        print("Extracting wordpress configuration...")
+        # Loop through wp-config.php and store key + values in wp_vars hash
+        for line in open(os.path.join(wp_path, wp_config)):
+            for match in define_pattern.finditer(line):
+                wp_vars[match.group(2)]=match.group(4)
+            for match in assign_pattern.finditer(line):
+                wp_vars[match.group(2)]=match.group(4)
+        print('Ok!')
+    except Exception as e:
+        print('Error: unable to parse wp-config.php (%s). \nMake sure "%s" is the the correct path to directory containing file "wp-config.php"' % (e, wp_path))
+        quit()
+
+    # Assign the values we need to run mysqldump in global variables
+    global wp_db, wp_username, wp_password, wp_site
+    wp_db = wp_vars['DB_NAME']
+    wp_site = wp_vars['WP_SITEURL']
+    wp_username = wp_vars['DB_USER']
+    wp_password = wp_vars['DB_PASSWORD']
+                
+# Create backupfile of database listed in wp-config.php using mysqldump
+def dumpWordpressDB():
+    print('Dumping wordpress database...')
+    try:
+        subprocess.Popen("mysqldump -u %s -p%s %s > /tmp/wp.databasebackup.sql" % (wp_username,wp_password,wp_db,))
+        print('Ok!')
+    except Exception as e:
+        print('%s \nError: mysqldump failed!' % (e))
+        quit()
+
+def zipWordpressFolder():
+    print('Copying wordpress files to zip...')
+
+    # Set root of zipfile to directory assigned by commandline arg
+    relroot = os.path.abspath(os.path.join(args.PATH, os.pardir))
+
+    # Set variable "exclude" base on commandline args
+    if args.includeuploads:
+        exclude = None
+    else:
+        exclude = 'uploads'
+
+    try:
+        with zipfile.ZipFile("/tmp/WP-Webbfiles.zip", "w", zipfile.ZIP_DEFLATED) as zip:
+            for root, dirs, files in os.walk(args.PATH, topdown=True):
+                # Don't walk through directorys in exclude
+                if exclude in dirs:
+                    dirs.remove(exclude)
+
+                zip.write(root, os.path.relpath(root, relroot))
+                for file in files:
+                        filename = os.path.join(root, file)
+                        if os.path.isfile(filename): # regular files only
+                            arcname = os.path.join(os.path.relpath(root, relroot), file)
+                            zip.write(filename, arcname)
+        print('Ok!')
+    except Exception as e:
+        print("%s\nError: failed to create zipfile" % (e))
+        quit()
+    
+
+def uploadFilesToSFTP():
+    username = config["sftp"]["sftp.username"]
+    password = config["sftp"]["sftp.password"]
+    server = config["sftp"]["sftp.server"]
+    remotedir = config["sftp"]["sftp.remotedir"]
+
+    print('Uploading files to '+server+'...')
+    srv = pysftp.Connection(host=server, username=username, password=password)
+    with srv.cd('/'):
+        try:
+            srv.mkdir(remotedir)
+        except:
+            srv.cd(remotedir)
+        srv.put('/tmp/WP-Webbfiles.zip', remotepath=os.path.join(remotedir, 'WP-Webbfiles.zip'))
+        srv.put('/tmp/wp.databasebackup.sql', remotepath=os.path.join(remotedir, 'wp.databasebackup.sql'))
+    srv.close()
+    print('Ok!')
+            
+# main class
+def main():
+    if args.PATH:
+        extractWordpressConf()
+        zipWordpressFolder()
+        #dumpWordpressDB()
+        uploadFilesToSFTP()
+    else:
+        parser.print_usage()
+
+# Go go go
+if __name__ == "__main__":
+   main()
