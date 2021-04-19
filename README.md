@@ -2,7 +2,7 @@
 Simple tool to backup wordpressfolder and database (using database connection properties from wp-config.php) and upload resulting files to sftp-server configured in "wpbackup.properties".
 
 ## Usage
-The tool is written in Python3 and requires the module [PySFTP](https://pypi.org/project/pysftp/) to enable sftp-upload. Install PySFTP using `pip install pysftp`. 
+The tool is written in Python3 and requires the module [PySFTP](https://pypi.org/project/pysftp/) to enable sftp-upload. Install PySFTP using `pip install pysftp`. Filenames are hardcoded to "WP-Webbfiles.zip" for wordpress-files and "wp.databasebackup.sql" for database. Suits my needs but kan easily be changed ;)
 
 ```
 wpbackup [-h] [-i] [-n] PATH
