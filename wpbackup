@@ -4,7 +4,7 @@
 # Commandline tool to quickly extract wordpress                    #
 # datafiles and wordpressdatabase and uploads sftp-server          #
 # Usage: ./wpbackup -h                                             #
-# Written by: daniel@fast2.se                                      #
+# Written by: daniel@oquinena.com                                  #
 ####################################################################
 
 import os
