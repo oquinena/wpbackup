@@ -59,7 +59,7 @@ def extractWordpressConf():
                 wp_vars[match.group(2)]=match.group(4)
         print('Ok!')
     except Exception as e:
-        print('Error: unable to parse wp-config.php (%s). \nMake sure "%s" is the the correct path to directory containing file "wp-config.php"' % (e, wp_path))
+        print('Error: unable to parse wp-config.php (%s). \nMake sure "%s" is the the correct path to directory containing file "%s"' % (e, wp_path, wp_config))
         quit()
 
     # Assign the values we need to run mysqldump in global variables
